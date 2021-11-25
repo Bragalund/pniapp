@@ -32,16 +32,19 @@ then
     echo "Created a file called: password.txt" 
     echo "open it and paste your password for decrypting/encrypting your files into it."
     echo "Then rerun this script."
-    exit 1;
+    exit 0;
 fi
 
 if [ ! -f "compressed.zip.001" ]
 then
     echo "First time? No files/archives to decrypt. "
-    echo "Creating notes-folder."
-    mkdir notes
-    echo "Open the folder and start taking notes."
-    echo "Then run the ladNotes-script to upload your notes :)"
+    if [ ! -d "./notes" ]
+    then
+        echo "Creating notes-folder."
+        mkdir notes
+        echo "Open your favourite note-taking application and start taking notes."
+    fi
+    echo "Run the ladNotes.sh to upload your notes :)"
     exit 0
 fi
 
