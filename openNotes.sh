@@ -24,7 +24,7 @@ fi
 
 git fetch
 HEADHASH=$(git rev-parse HEAD)
-UPSTREAMHASH=$(git rev-parse master@{upstream})
+UPSTREAMHASH=$(git rev-parse main@{upstream})
 
 if [ ! -f "password.txt" ]
 then
@@ -35,9 +35,20 @@ then
     exit 1;
 fi
 
+if [ ! -f "compressed.zip.001" ]
+then
+    echo "First time? No files/archives to decrypt. "
+    echo "Creating notes-folder."
+    mkdir notes
+    echo "Open the folder and start taking notes."
+    echo "Then run the ladNotes-script to upload your notes :)"
+    exit 0
+fi
+
+
 if [ "$HEADHASH" != "$UPSTREAMHASH" ] || [ ! -d "./notes" ]
 then
-	git pull origin master;
+	git pull origin main;
 	7z e "compressed.zip.*" -onotes -p$(cat password.txt);
 	exit 0
 else 
