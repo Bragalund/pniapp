@@ -44,7 +44,7 @@ then
         mkdir notes
         echo "Open your favourite note-taking application and start taking notes."
     fi
-    echo "Run the ladNotes.sh to upload your notes :)"
+    echo "Run loadNotes.sh to upload your notes :)"
     exit 0
 fi
 
