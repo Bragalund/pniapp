@@ -1,6 +1,8 @@
 # private notes in an public place 
 
-Use git for your notes and back them up in an encrypted state.
+Use git for your notes and back them up in an encrypted state in github.
+Keeps encrypted and compressed files under filesizecap of 50mb.
+Uses 7zip implementation of AES-256 encryption.
 
 ## Prerequisits  
 

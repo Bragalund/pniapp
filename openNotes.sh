@@ -22,10 +22,6 @@ then
     exit 0;
 fi
 
-git fetch
-HEADHASH=$(git rev-parse HEAD)
-UPSTREAMHASH=$(git rev-parse main@{upstream})
-
 if [ ! -f "password.txt" ]
 then
     touch password.txt;
@@ -48,6 +44,9 @@ then
     exit 0
 fi
 
+git fetch
+HEADHASH=$(git rev-parse HEAD)
+UPSTREAMHASH=$(git rev-parse main@{upstream})
 
 if [ "$HEADHASH" != "$UPSTREAMHASH" ] || [ ! -d "./notes" ]
 then
