@@ -20,22 +20,38 @@ Use a branch named __main__
 
 Run:  
 ```sh
-./openNotes.sh
+make
+```
+
+This installs dependencies, makes `pniap` executable, and shows help.
+
+Open notes (default folder `./notes`):  
+```sh
+./pniap --open
 cd notes
-```  
-
-This should install needed dependencies and create needed folders.
-
+```
 
 Do some notetaking inside of notes-directory.
 
-When finished with notetaking:  
-
+Close notes (encrypt, compress, commit, push):  
 ```sh
-./closeNotes.sh
+./pniap --close
 ```
 
-This encrypts, compresses the files and uploads them to your git origin.  
+Custom notes folder:  
+```sh
+./pniap --open ./my_notes
+./pniap --close ./my_notes
+```
+
+Selftest:  
+```sh
+./pniap --selftest
+```
+
+Non-interactive git init:  
+```sh
+PNIAP_YES=1 ./pniap --open
+```
 
 Enjoy :)  
-

@@ -1,7 +1,17 @@
-.PHONY: test shellcheck
+.PHONY: all test shellcheck deps setup
+
+all: setup
 
 test:
-	bash test_notes.sh
+	./pniap --selftest
 
 shellcheck:
-	shellcheck openNotes.sh closeNotes.sh test_notes.sh
+	shellcheck pniap
+
+deps:
+	sudo apt update
+	sudo apt install -y git p7zip-full shellcheck
+
+setup: deps
+	chmod +x pniap
+	./pniap --help

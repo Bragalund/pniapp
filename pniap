@@ -1,0 +1,340 @@
+#!/bin/bash
+
+set -euo pipefail
+IFS=$'\n\t'
+
+NOCOLOR='\033[0m' # No Color
+ERROR='\033[0;31m'
+
+show_help() {
+    cat <<'HELP'
+Usage:
+  pniap --open [NOTES_DIR]
+  pniap --close [NOTES_DIR]
+  pniap --remote <GIT_URL>
+  pniap --selftest
+  pniap --help
+
+Options:
+  --open        Fetch and decrypt notes (default NOTES_DIR: ./notes)
+  --close       Compress, encrypt, commit, and push notes (default NOTES_DIR: ./notes)
+  --remote      Set or update the git remote named origin
+  --selftest    Run a self-contained test in a temp directory
+  --help        Show this help
+
+Environment:
+  PNIAP_YES     Set to 1 to auto-initialize a git repo without prompting
+HELP
+}
+
+require_cmd() {
+    local cmd="$1"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        printf 'Missing required command: %s\n' "$cmd" >&2
+        exit 1
+    fi
+}
+
+generate_password() {
+    # 24 chars for strength; includes upper, lower, digits, and symbols.
+    tr -dc 'A-Za-z0-9!@#%^_-+=:,.?/' < /dev/urandom | head -c 24
+}
+
+ensure_cmd() {
+    local cmd="$1"
+    local pkg="$2"
+
+    if ! command -v "$cmd" &> /dev/null; then
+        if ! command -v sudo &> /dev/null; then
+            printf '%bMissing sudo; cannot install %s.%b\n' "$ERROR" "$pkg" "$NOCOLOR"
+            exit 1
+        fi
+        if ! command -v apt &> /dev/null; then
+            printf '%bMissing apt; cannot install %s.%b\n' "$ERROR" "$pkg" "$NOCOLOR"
+            exit 1
+        fi
+        sudo apt update -y
+        sudo apt install "$pkg" -y
+        exit 0
+    fi
+}
+
+ensure_git_repo() {
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        if [ "${PNIAP_YES:-0}" = "1" ]; then
+            reply="y"
+        else
+            printf 'No git repo found. Initialize one here? [y/N] '
+            read -r reply
+        fi
+        case "$reply" in
+            y|Y)
+                git init >/dev/null
+                current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+                if [ "$current_branch" != "main" ]; then
+                    git checkout -b main >/dev/null 2>&1 || true
+                fi
+                printf 'Initialized git repository in %s\n' "$PWD"
+                ;;
+            *)
+                printf 'Aborted: git repo required for this operation.\n'
+                exit 1
+                ;;
+        esac
+    fi
+}
+
+open_notes() {
+    local notes_dir="$1"
+
+    ensure_cmd git git
+    ensure_cmd 7z p7zip-full
+    ensure_git_repo
+
+    if [ ! -s "password.txt" ]; then
+        PASSWORD=$(generate_password)
+        printf '%s\n' "$PASSWORD" > password.txt
+        chmod 600 password.txt
+        printf 'Generated a secure password in password.txt\n'
+    fi
+
+    if [ ! -f "compressed.zip.001" ]; then
+        printf 'First time? No files/archives to decrypt.\n'
+        if [ ! -d "$notes_dir" ]; then
+            printf 'Creating notes-folder.\n'
+            mkdir -p "$notes_dir"
+            printf 'Open your favourite note-taking application and start taking notes.\n'
+        fi
+        printf 'Run pniap --close to upload your notes :)\n'
+        exit 0
+    fi
+
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git fetch
+        HEADHASH=$(git rev-parse HEAD)
+        if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+            UPSTREAMHASH=$(git rev-parse "@{u}")
+        else
+            UPSTREAMHASH=""
+        fi
+
+        if [ "$HEADHASH" != "$UPSTREAMHASH" ] || [ ! -d "$notes_dir" ]; then
+            if git remote get-url origin >/dev/null 2>&1; then
+                git pull origin main
+            else
+                printf 'No git remote configured; skipping pull.\n'
+            fi
+            PASSWORD=$(<password.txt)
+            7z x compressed.zip.* -o"$notes_dir" -p"$PASSWORD"
+            exit 0
+        else
+            printf 'Notes up to date :)\n'
+        fi
+    else
+        printf 'Not inside a git repo; skipping git fetch/pull.\n'
+        if [ ! -d "$notes_dir" ]; then
+            PASSWORD=$(<password.txt)
+            7z x compressed.zip.* -o"$notes_dir" -p"$PASSWORD"
+        fi
+    fi
+}
+
+close_notes() {
+    local notes_dir="$1"
+
+    ensure_cmd git git
+    ensure_cmd 7z p7zip-full
+    ensure_git_repo
+
+    if [ ! -d "$notes_dir" ]; then
+        printf '%bMissing %s directory. Aborting.%b\n' "$ERROR" "$notes_dir" "$NOCOLOR"
+        exit 1
+    fi
+
+    if [ ! -s "password.txt" ]; then
+        PASSWORD=$(generate_password)
+        printf '%s\n' "$PASSWORD" > password.txt
+        chmod 600 password.txt
+        printf 'Generated a secure password in password.txt\n'
+    fi
+
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [ "$BRANCH" != "master" ] && [ "$BRANCH" != "main" ]; then
+        printf '%bNot on main or master. Aborting.%b\n' "$ERROR" "$NOCOLOR"
+        exit 1
+    fi
+
+    if [ -f compressed.zip.001 ]; then
+        printf 'removing existing compressed files.\n'
+        rm -f compressed.zip.*
+        printf 'removed existing compressed files.\n'
+    fi
+
+    PASSWORD=$(<password.txt)
+    OUTPUT_ARCHIVE="$PWD/compressed"
+
+    (cd "$notes_dir" && 7z a -tzip -v50M -mx=9 "$OUTPUT_ARCHIVE" . -p"$PASSWORD" -aoa)
+
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        if [ "$BRANCH" != "master" ] && [ "$BRANCH" != "main" ]; then
+            printf '%bNot on main or master. Aborting.%b\n' "$ERROR" "$NOCOLOR"
+            exit 1
+        fi
+
+        git add 'compressed.zip.*'
+        if git diff --cached --quiet; then
+            printf 'No changes to commit.\n'
+            exit 0
+        fi
+
+        git commit -m "Compressed some files"
+        if git remote get-url origin >/dev/null 2>&1; then
+            git push origin "$BRANCH"
+        else
+            printf 'No git remote configured; skipping push.\n'
+        fi
+    else
+        printf 'Not inside a git repo; skipping commit/push.\n'
+    fi
+}
+
+selftest() {
+    require_cmd git
+    require_cmd 7z
+    require_cmd mktemp
+    require_cmd diff
+
+    local script_path
+    script_path=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+
+    local tmp_base="${TMPDIR:-/tmp}"
+    if [ ! -w "$tmp_base" ]; then
+        tmp_base=$(cd "$(dirname "$0")" && pwd)
+    fi
+
+    local tmp_root
+    tmp_root=$(mktemp -d "$tmp_base/pniap-test.XXXXXXXXXX")
+
+    cleanup() {
+        rm -rf "$tmp_root"
+    }
+    trap cleanup RETURN
+
+    local remote="$tmp_root/remote.git"
+    local work="$tmp_root/work"
+    local backup="$tmp_root/backup"
+
+    mkdir -p "$work"
+
+    git init --bare "$remote" >/dev/null
+
+    git init "$work" >/dev/null
+    cd "$work"
+
+    git config user.email "test@example.com"
+    git config user.name "Test Runner"
+
+    git checkout -b main >/dev/null
+
+    touch README.md
+    git add README.md
+    git commit -m "init" >/dev/null
+
+    git remote add origin "$remote"
+    git push -u origin main >/dev/null
+
+    cp "$script_path" "$work/pniap"
+    chmod +x "$work/pniap"
+
+    printf 'test-pass' > "$work/password.txt"
+
+    mkdir -p "$work/test-notes/subdir"
+    cat <<'NOTE' > "$work/test-notes/note1.txt"
+Hello notes
+Line two
+NOTE
+
+    echo "Another file" > "$work/test-notes/subdir/note2.txt"
+
+    cp -a "$work/test-notes" "$backup"
+
+    ./pniap --remote "$remote" >/dev/null
+    ./pniap --close ./test-notes >/dev/null
+
+    if [ ! -f "$work/compressed.zip.001" ]; then
+        printf 'Archive not created\n' >&2
+        exit 1
+    fi
+
+    if 7z x "$work/compressed.zip.001" -o"$tmp_root/wrong" -pwrongpass >/dev/null 2>&1; then
+        printf 'Archive decrypted with wrong password\n' >&2
+        exit 1
+    fi
+
+    rm -rf "$work/test-notes"
+
+    ./pniap --open ./test-notes >/dev/null
+
+    if [ ! -d "$work/test-notes" ]; then
+        printf 'Notes not restored\n' >&2
+        exit 1
+    fi
+
+    if ! diff -r "$backup" "$work/test-notes" >/dev/null; then
+        printf 'Restored notes do not match original\n' >&2
+        exit 1
+    fi
+
+    printf 'Selftest passed\n'
+}
+
+set_remote() {
+    local remote_url="$1"
+
+    ensure_git_repo
+
+    if git remote get-url origin >/dev/null 2>&1; then
+        git remote set-url origin "$remote_url"
+    else
+        git remote add origin "$remote_url"
+    fi
+
+    printf 'Set origin to %s\n' "$remote_url"
+}
+
+if [ "$#" -lt 1 ]; then
+    show_help
+    exit 1
+fi
+
+case "$1" in
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    --open)
+        notes_dir="${2:-./notes}"
+        open_notes "$notes_dir"
+        ;;
+    --close)
+        notes_dir="${2:-./notes}"
+        close_notes "$notes_dir"
+        ;;
+    --remote)
+        if [ "$#" -ne 2 ]; then
+            printf 'Missing git remote URL\n'
+            show_help
+            exit 1
+        fi
+        set_remote "$2"
+        ;;
+    --selftest)
+        selftest
+        ;;
+    *)
+        printf 'Unknown option: %s\n' "$1"
+        show_help
+        exit 1
+        ;;
+esac
