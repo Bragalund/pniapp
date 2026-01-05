@@ -1,8 +1,9 @@
 #!/bin/bash 
 
+set -euo pipefail
+IFS=$'\n\t'
+
 ACTION='\033[1;90m'
-FINISHED='\033[1;96m'
-READY='\033[1;92m'
 NOCOLOR='\033[0m' # No Color
 ERROR='\033[0;31m'
 
@@ -17,13 +18,13 @@ Environment:
 HELP
 }
 
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     show_help
     exit 0
 fi
 
 if [ "$#" -gt 0 ]; then
-    echo "Unknown option: $1"
+    printf 'Unknown option: %s\n' "$1"
     show_help
     exit 1
 fi
@@ -55,47 +56,47 @@ ensure_cmd 7z p7zip-full
 NOTES_DIR="${NOTES_DIR:-./notes}"
 
 echo
-echo -e ${ACTION}Checking Git repo
-echo -e =======================${NOCOLOR}
+printf '%bChecking Git repo\n' "$ACTION"
+printf '=======================%b\n' "$NOCOLOR"
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo -e ${ERROR}Not inside a git repo. Aborting.${NOCOLOR}
+    printf '%bNot inside a git repo. Aborting.%b\n' "$ERROR" "$NOCOLOR"
     echo
     exit 1
 fi
 
 if [ ! -d "$NOTES_DIR" ]; then
-    echo -e ${ERROR}Missing $NOTES_DIR directory. Aborting.${NOCOLOR}
+    printf '%bMissing %s directory. Aborting.%b\n' "$ERROR" "$NOTES_DIR" "$NOCOLOR"
     exit 1
 fi
 
 if [ ! -s "password.txt" ]; then
-    echo -e ${ERROR}Missing or empty password.txt. Aborting.${NOCOLOR}
+    printf '%bMissing or empty password.txt. Aborting.%b\n' "$ERROR" "$NOCOLOR"
     exit 1
 fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 if [ "$BRANCH" != "master" ] && [ "$BRANCH" != "main" ]; then
-    echo -e ${ERROR}Not on main or master. Aborting. ${NOCOLOR}
+    printf '%bNot on main or master. Aborting.%b\n' "$ERROR" "$NOCOLOR"
     echo
-    exit 0 
+    exit 1 
 fi 
 
 if [ -f compressed.zip.001 ]; then
-    echo "removing existing compressed files." 
+    printf 'removing existing compressed files.\n'
     rm -f compressed.zip.*;
-    echo "removed existing compressed files."
+    printf 'removed existing compressed files.\n'
 fi
 
-PASSWORD=$(cat password.txt)
+PASSWORD=$(<password.txt)
 OUTPUT_ARCHIVE="$PWD/compressed"
 
 (cd "$NOTES_DIR" && 7z a -tzip -v50M -mx=9 "$OUTPUT_ARCHIVE" . -p"$PASSWORD" -aoa)
 
 git add 'compressed.zip.*';
 if git diff --cached --quiet; then
-    echo "No changes to commit."
+    printf 'No changes to commit.\n'
     exit 0
 fi
 

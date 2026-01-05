@@ -1,8 +1,8 @@
 #!/bin/bash
 
-ACTION='\033[1;90m'
-FINISHED='\033[1;96m'
-READY='\033[1;92m'
+set -euo pipefail
+IFS=$'\n\t'
+
 NOCOLOR='\033[0m' # No Color
 ERROR='\033[0;31m'
 
@@ -18,13 +18,13 @@ Environment:
 HELP
 }
 
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     show_help
     exit 0
 fi
 
 if [ "$#" -gt 0 ]; then
-    echo "Unknown option: $1"
+    printf 'Unknown option: %s\n' "$1"
     show_help
     exit 1
 fi
@@ -58,30 +58,30 @@ NOTES_DIR="${NOTES_DIR:-./notes}"
 if [ ! -f "password.txt" ]
 then
     touch password.txt;
-    echo "Created a file called: password.txt" 
-    echo "open it and paste your password for decrypting/encrypting your files into it."
-    echo "Then rerun this script."
+    printf 'Created a file called: password.txt\n'
+    printf 'open it and paste your password for decrypting/encrypting your files into it.\n'
+    printf 'Then rerun this script.\n'
     exit 0;
 fi
 
 if [ ! -f "compressed.zip.001" ]
 then
-    echo "First time? No files/archives to decrypt. "
+    printf 'First time? No files/archives to decrypt.\n'
     if [ ! -d "$NOTES_DIR" ]
     then
-        echo "Creating notes-folder."
+        printf 'Creating notes-folder.\n'
         mkdir -p "$NOTES_DIR"
-        echo "Open your favourite note-taking application and start taking notes."
+        printf 'Open your favourite note-taking application and start taking notes.\n'
     fi
-    echo "Run closeNotes.sh to upload your notes :)"
+    printf 'Run closeNotes.sh to upload your notes :)\n'
     exit 0
 fi
 
 git fetch
 HEADHASH=$(git rev-parse HEAD)
-if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1
+if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1
 then
-    UPSTREAMHASH=$(git rev-parse @{u})
+    UPSTREAMHASH=$(git rev-parse "@{u}")
 else
     UPSTREAMHASH=""
 fi
@@ -89,8 +89,9 @@ fi
 if [ "$HEADHASH" != "$UPSTREAMHASH" ] || [ ! -d "$NOTES_DIR" ]
 then
 	git pull origin main;
-	7z x compressed.zip.* -o"$NOTES_DIR" -p"$(cat password.txt)";
+	PASSWORD=$(<password.txt)
+	7z x compressed.zip.* -o"$NOTES_DIR" -p"$PASSWORD";
 	exit 0
 else 
-    echo "Notes up to date :)";
+    printf 'Notes up to date :)\n'
 fi

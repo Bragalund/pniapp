@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -euo pipefail
+IFS=$'\n\t'
 
 require_cmd() {
     local cmd="$1"
@@ -17,7 +18,12 @@ require_cmd diff
 
 REPO_ROOT=$(cd "$(dirname "$0")" && pwd)
 
-TMP_ROOT=$(mktemp -d)
+TMP_BASE="${TMPDIR:-/tmp}"
+if [ ! -w "$TMP_BASE" ]; then
+    TMP_BASE="$REPO_ROOT"
+fi
+
+TMP_ROOT=$(mktemp -d "$TMP_BASE/pniapp-test.XXXXXXXXXX")
 cleanup() {
     rm -rf "$TMP_ROOT"
 }
