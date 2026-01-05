@@ -6,21 +6,54 @@ READY='\033[1;92m'
 NOCOLOR='\033[0m' # No Color
 ERROR='\033[0;31m'
 
+show_help() {
+    cat <<'HELP'
+Usage: ./openNotes.sh [--help]
+
+Fetches and decrypts the latest notes archive.
+Creates ./notes on first run if no archive exists.
+
+Environment:
+  NOTES_DIR   Notes directory to create/use (default: ./notes)
+HELP
+}
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+    exit 0
+fi
+
+if [ "$#" -gt 0 ]; then
+    echo "Unknown option: $1"
+    show_help
+    exit 1
+fi
+
+ensure_cmd() {
+    local cmd="$1"
+    local pkg="$2"
+
+    if ! command -v "$cmd" &> /dev/null; then
+        if ! command -v sudo &> /dev/null; then
+            echo -e "${ERROR}Missing sudo; cannot install $pkg.${NOCOLOR}"
+            exit 1
+        fi
+        if ! command -v apt &> /dev/null; then
+            echo -e "${ERROR}Missing apt; cannot install $pkg.${NOCOLOR}"
+            exit 1
+        fi
+        sudo apt update -y
+        sudo apt install "$pkg" -y
+        exit 0
+    fi
+}
+
 # Install needed dependencies if not installed
 
-if ! command -v git &> /dev/null
-then
-    sudo apt update -y;
-    sudo apt install git -y;
-    exit;
-fi  
+ensure_cmd git git
+ensure_cmd 7z p7zip-full
 
-if ! command 7z &> /dev/null
-then
-    sudo apt update -y;
-    sudo apt install p7zip-full -y;
-    exit 0;
-fi
+NOTES_DIR="${NOTES_DIR:-./notes}"
 
 if [ ! -f "password.txt" ]
 then
@@ -34,28 +67,30 @@ fi
 if [ ! -f "compressed.zip.001" ]
 then
     echo "First time? No files/archives to decrypt. "
-    if [ ! -d "./notes" ]
+    if [ ! -d "$NOTES_DIR" ]
     then
         echo "Creating notes-folder."
-        mkdir notes
+        mkdir -p "$NOTES_DIR"
         echo "Open your favourite note-taking application and start taking notes."
     fi
-    echo "Run loadNotes.sh to upload your notes :)"
+    echo "Run closeNotes.sh to upload your notes :)"
     exit 0
 fi
 
 git fetch
 HEADHASH=$(git rev-parse HEAD)
-UPSTREAMHASH=$(git rev-parse main@{upstream})
+if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1
+then
+    UPSTREAMHASH=$(git rev-parse @{u})
+else
+    UPSTREAMHASH=""
+fi
 
-if [ "$HEADHASH" != "$UPSTREAMHASH" ] || [ ! -d "./notes" ]
+if [ "$HEADHASH" != "$UPSTREAMHASH" ] || [ ! -d "$NOTES_DIR" ]
 then
 	git pull origin main;
-	7z e "compressed.zip.*" -onotes -p$(cat password.txt);
+	7z e compressed.zip.* -o"$NOTES_DIR" -p"$(cat password.txt)";
 	exit 0
 else 
     echo "Notes up to date :)";
 fi
-
-
-
