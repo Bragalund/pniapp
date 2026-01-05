@@ -88,7 +88,10 @@ if [ -f compressed.zip.001 ]; then
     echo "removed existing compressed files."
 fi
 
-7z a -tzip -v50M -mx=9 ./compressed "$NOTES_DIR" -p"$(cat password.txt)" -aoa;
+PASSWORD=$(cat password.txt)
+OUTPUT_ARCHIVE="$PWD/compressed"
+
+(cd "$NOTES_DIR" && 7z a -tzip -v50M -mx=9 "$OUTPUT_ARCHIVE" . -p"$PASSWORD" -aoa)
 
 git add 'compressed.zip.*';
 if git diff --cached --quiet; then

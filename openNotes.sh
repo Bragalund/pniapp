@@ -89,7 +89,7 @@ fi
 if [ "$HEADHASH" != "$UPSTREAMHASH" ] || [ ! -d "$NOTES_DIR" ]
 then
 	git pull origin main;
-	7z e compressed.zip.* -o"$NOTES_DIR" -p"$(cat password.txt)";
+	7z x compressed.zip.* -o"$NOTES_DIR" -p"$(cat password.txt)";
 	exit 0
 else 
     echo "Notes up to date :)";
